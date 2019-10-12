@@ -4,15 +4,20 @@
     gcc server.c -lpthread -o server
 */
  
+#include <iostream>
+
 #include<stdio.h>
 #include<string.h>    //strlen
 #include<stdlib.h>    //strlen
 #include<sys/socket.h>
+#include<sys/types.h>
 #include<arpa/inet.h> //inet_addr
 #include<unistd.h>    //write
 #include<pthread.h> //for threading , link with lpthread
  
+using namespace std;
 //the thread function
+
 void *connection_handler(void *);
  
 int main(int argc , char *argv[])
@@ -87,28 +92,22 @@ void *connection_handler(void *socket_desc)
     //Get the socket descriptor
     int sock = *(int*)socket_desc;
     int read_size;
-    char *message , client_message[2000];
-     
+
     //Send some messages to the client
-    message = "Greetings! I am your connection handler\n";
-    write(sock , message , strlen(message));
-     
-    message = "Now type something and i shall repeat what you type \n";
-    write(sock , message , strlen(message));
-     
-    //Receive a message from client
-    while( (read_size = recv(sock , client_message , 2000 , 0)) > 0 )
-    {
-        //end of string marker
-		client_message[read_size] = '\0';
-		
-		//Send the message back to client
-        write(sock , client_message , strlen(client_message));
-		
-		//clear the message buffer
-		memset(client_message, 0, 2000);
+    //char message[] = "Hi Peer !!! Here is the current list of Peer and their files : \n";
+    //write(sock , message , strlen(message));
+    FILE *fp = fopen("peer_list.txt","rb");
+    char buffer[2048];
+    int n;
+    fseek(fp, 0, SEEK_END);
+    int size = ftell(fp);
+    rewind(fp);
+
+    while((n = fread(buffer, sizeof(char), 2048, fp)) > 0 && size > 0) {
+         send(sock, buffer, n, 0);
+         memset(buffer, '\0', 2048);
+         size = size - n;
     }
-     
     if(read_size == 0)
     {
         puts("Client disconnected");
