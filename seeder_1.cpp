@@ -14,8 +14,7 @@
 #include<arpa/inet.h> //inet_addr
 #include<unistd.h>    //write
 #include<pthread.h> //for threading , link with lpthread
-
-
+ 
 using namespace std;
 //the thread function
 
@@ -24,7 +23,7 @@ void *connection_handler(void *);
 int main(int argc , char *argv[])
 {
     int socket_desc , client_sock , c;
-    struct sockaddr_in server , client;
+    struct sockaddr_in seeder , client;
      
     //Create socket
     socket_desc = socket(AF_INET , SOCK_STREAM , 0);
@@ -35,12 +34,12 @@ int main(int argc , char *argv[])
     puts("Socket created");
      
     //Prepare the sockaddr_in structure
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons( 8888 );
+    seeder.sin_family = AF_INET;
+    seeder.sin_addr.s_addr = inet_addr("127.0.0.5");
+    seeder.sin_port = htons( 9898 );
      
     //Bind
-    if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
+    if( bind(socket_desc,(struct sockaddr *)&seeder , sizeof(seeder)) < 0)
     {
         //print the error message
         perror("bind failed. Error");
@@ -72,7 +71,7 @@ int main(int argc , char *argv[])
         }
          
         //Now join the thread , so that we dont terminate before the thread
-        //pthread_join( thread_id , NULL);
+        pthread_join( thread_id , NULL);
         puts("Handler assigned");
     }
      
@@ -88,17 +87,21 @@ int main(int argc , char *argv[])
 /*
  * This will handle connection for each client
  * */
-
 void *connection_handler(void *socket_desc)
 {
     //Get the socket descriptor
     int sock = *(int*)socket_desc;
     int read_size;
 
+    char file_name[127];
+    recv(sock , file_name , 126 , 0);
+    file_name[strlen(file_name)] = '\0';
+
     //Send some messages to the client
     //char message[] = "Hi Peer !!! Here is the current list of Peer and their files : \n";
     //write(sock , message , strlen(message));
-    FILE *fp = fopen("peer_list.txt","rb");
+    
+    FILE *fp = fopen(file_name,"rb");
     char buffer[2048];
     int n;
     fseek(fp, 0, SEEK_END);
@@ -110,12 +113,14 @@ void *connection_handler(void *socket_desc)
          memset(buffer, '\0', 2048);
          size = size - n;
     }
-    if(read_size == 0)
+
+    printf("File send complete by seeder_1 \n");
+    if(n == 0)
     {
         puts("Client disconnected");
         fflush(stdout);
     }
-    else if(read_size == -1)
+    else if(n == -1)
     {
         perror("recv failed");
     }
