@@ -25,6 +25,9 @@ struct peerInfo {
   vector<string> files;
 };
 vector<peerInfo> total_peers;
+void *peer_handler(void *);
+void *connection_handler(void *);
+string file;
 
 void get_list_from_tracker() {
   /* first get list from tracker */
@@ -95,14 +98,103 @@ void get_peers_which_have_the_file(string file, vector<string> &ip_list,
   }
 }
 
-void call_seeder(vector<string> ip,u_int16_t port){
+int call_leecher() {
+  get_list_from_tracker();
+  parse_peer_list();
+  display_peer_info();
+  cout << "Input the file name which you want to download : ";
+  cin >> file;
+  vector<string> ip_list;
+  vector<string> port_list;
 
+  get_peers_which_have_the_file(file, ip_list, port_list);
+  pthread_t thread_id;
+
+  size_t si = 0, interval = 200;
+
+  for (int index = 0; index < ip_list.size(); index++) {
+
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in tracker_addr;
+    tracker_addr.sin_family = AF_INET;
+    u_int16_t port_id = atoi(port_list[index].c_str());
+    tracker_addr.sin_port = htons(port_id);
+    tracker_addr.sin_addr.s_addr = inet_addr(ip_list[index].c_str());
+    connect(sockfd, (struct sockaddr *)&tracker_addr, sizeof(tracker_addr));
+
+    if (pthread_create(&thread_id, NULL, peer_handler, (void *)&sockfd) < 0) {
+      perror("could not create thread");
+      return 1;
+    }
+
+    // Now join the thread , so that we dont terminate before the thread
+    pthread_join(thread_id, NULL);
+    puts("Handler assigned");
+  }
+
+  return 0;
+}
+
+int call_seeder(string ip, u_int16_t port) {
+  int socket_desc, client_sock, c;
+  struct sockaddr_in seeder, client;
+
+  // Create socket
+  socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+  if (socket_desc == -1) {
+    printf("Could not create socket");
+  }
+  puts("Socket created");
+
+  // Prepare the sockaddr_in structure
+  seeder.sin_family = AF_INET;
+  seeder.sin_addr.s_addr = inet_addr(ip.c_str());
+  seeder.sin_port = htons(port);
+
+  // Bind
+  if (bind(socket_desc, (struct sockaddr *)&seeder, sizeof(seeder)) < 0) {
+    // print the error message
+    perror("bind failed. Error");
+    return 1;
+  }
+  puts("bind done");
+
+  // Listen
+  listen(socket_desc, 3);
+
+  // Accept and incoming connection
+  puts("Waiting for incoming connections...");
+  c = sizeof(struct sockaddr_in);
+
+  // Accept and incoming connection
+  puts("Waiting for incoming connections...");
+  c = sizeof(struct sockaddr_in);
+  pthread_t thread_id;
+
+  while ((client_sock = accept(socket_desc, (struct sockaddr *)&client,
+                               (socklen_t *)&c))) {
+    puts("Connection accepted");
+
+    if (pthread_create(&thread_id, NULL, connection_handler,
+                       (void *)&client_sock) < 0) {
+      perror("could not create thread");
+      return 1;
+    }
+
+    // Now join the thread , so that we dont terminate before the thread
+    pthread_join(thread_id, NULL);
+    puts("Handler assigned");
+  }
+
+  if (client_sock < 0) {
+    perror("accept failed");
+    return 1;
+  }
+
+  return 0;
 }
 
 
-void *peer_handler(void *);
-void *connection_handler(void *);
-string file;
 
 int main(int argc, char *argv[]) {
   char ch;
@@ -112,94 +204,19 @@ int main(int argc, char *argv[]) {
   cin >> ch;
   switch (ch) {
   case 'D': {
-    get_list_from_tracker();
-    parse_peer_list();
-    display_peer_info();
-    cout << "Input the file name which you want to download : ";
-    cin >> file;
-    vector<string> ip_list;
-    vector<string> port_list;
-
-    get_peers_which_have_the_file(file, ip_list, port_list);
-    pthread_t thread_id;
-
-    size_t si = 0, interval = 200;
-
-    for (int index = 0; index < ip_list.size(); index++) {
-
-      int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-      struct sockaddr_in tracker_addr;
-      tracker_addr.sin_family = AF_INET;
-      u_int16_t port_id = atoi(port_list[index].c_str());
-      tracker_addr.sin_port = htons(port_id);
-      tracker_addr.sin_addr.s_addr = inet_addr(ip_list[index].c_str());
-      connect(sockfd, (struct sockaddr *)&tracker_addr, sizeof(tracker_addr));
-
-      if (pthread_create(&thread_id, NULL, peer_handler, (void *)&sockfd) < 0) {
-        perror("could not create thread");
-        return 1;
-      }
-
-      // Now join the thread , so that we dont terminate before the thread
-      pthread_join(thread_id, NULL);
-      puts("Handler assigned");
-    }
+    call_leecher();
   } break;
   case 'U': {
-    int socket_desc, client_sock, c;
-    struct sockaddr_in seeder, client;
+    cout << "Enter IP address : ";
+    string ip;
+    cin >> ip;
 
-    // Create socket
-    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_desc == -1) {
-      printf("Could not create socket");
-    }
-    puts("Socket created");
+    cout << "Enter Port Number : ";
+    u_int16_t port;
+    cin >> port;
 
-    // Prepare the sockaddr_in structure
-    seeder.sin_family = AF_INET;
-    seeder.sin_addr.s_addr = inet_addr("127.0.0.6");
-    seeder.sin_port = htons(8789);
+    call_seeder(ip, port);
 
-    // Bind
-    if (bind(socket_desc, (struct sockaddr *)&seeder, sizeof(seeder)) < 0) {
-      // print the error message
-      perror("bind failed. Error");
-      return 1;
-    }
-    puts("bind done");
-
-    // Listen
-    listen(socket_desc, 3);
-
-    // Accept and incoming connection
-    puts("Waiting for incoming connections...");
-    c = sizeof(struct sockaddr_in);
-
-    // Accept and incoming connection
-    puts("Waiting for incoming connections...");
-    c = sizeof(struct sockaddr_in);
-    pthread_t thread_id;
-
-    while ((client_sock = accept(socket_desc, (struct sockaddr *)&client,
-                                 (socklen_t *)&c))) {
-      puts("Connection accepted");
-
-      if (pthread_create(&thread_id, NULL, connection_handler,
-                         (void *)&client_sock) < 0) {
-        perror("could not create thread");
-        return 1;
-      }
-
-      // Now join the thread , so that we dont terminate before the thread
-      pthread_join(thread_id, NULL);
-      puts("Handler assigned");
-    }
-
-    if (client_sock < 0) {
-      perror("accept failed");
-      return 1;
-    }
   } break;
   default:
     break;
@@ -223,6 +240,7 @@ void *peer_handler(void *socket_desc) {
   string path;
   cin >> path;
   char full_path[128];
+  memset(full_path,0,128);
   strcat(full_path, path.c_str());
   strcat(full_path, file.c_str());
 
