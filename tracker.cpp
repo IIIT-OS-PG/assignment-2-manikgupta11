@@ -1,28 +1,22 @@
-/*
-    C socket server example, handles multiple clients using threads
-    Compile
-    gcc server.c -lpthread -o server
-*/
- 
 #include <iostream>
-
 #include<stdio.h>
-#include<string.h>    //strlen
-#include<stdlib.h>    //strlen
+#include<string.h>   
+#include<stdlib.h>    
 #include<sys/socket.h>
 #include<sys/types.h>
-#include<arpa/inet.h> //inet_addr
-#include<unistd.h>    //write
-#include<pthread.h> //for threading , link with lpthread
-
+#include<arpa/inet.h> 
+#include<unistd.h>    
+#include<pthread.h> 
 
 using namespace std;
-//the thread function
 
 void *connection_handler(void *);
+string tracker_file;
  
 int main(int argc , char *argv[])
 {
+    tracker_file=argv[1];
+    int tracker_no =atoi(argv[2]);
     int socket_desc , client_sock , c;
     struct sockaddr_in server , client;
      
@@ -42,14 +36,13 @@ int main(int argc , char *argv[])
     //Bind
     if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
     {
-        //print the error message
         perror("bind failed. Error");
         return 1;
     }
     puts("bind done");
      
     //Listen
-    listen(socket_desc , 3);
+    listen(socket_desc , 5);
      
     //Accept and incoming connection
     puts("Waiting for incoming connections...");
@@ -61,6 +54,7 @@ int main(int argc , char *argv[])
     c = sizeof(struct sockaddr_in);
 	pthread_t thread_id;
 	
+    //open new thread for every request
     while( (client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c)) )
     {
         puts("Connection accepted");
@@ -85,9 +79,7 @@ int main(int argc , char *argv[])
     return 0;
 }
  
-/*
- * This will handle connection for each client
- * */
+ // This will handle connection for each client
 
 void *connection_handler(void *socket_desc)
 {
@@ -98,13 +90,14 @@ void *connection_handler(void *socket_desc)
     //Send some messages to the client
     //char message[] = "Hi Peer !!! Here is the current list of Peer and their files : \n";
     //write(sock , message , strlen(message));
-    FILE *fp = fopen("peer_list.txt","rb");
+    FILE *fp = fopen(tracker_file.c_str(),"rb");
     char buffer[2048];
     int n;
     fseek(fp, 0, SEEK_END);
     int size = ftell(fp);
     rewind(fp);
-
+    
+    //read peer_list intp buffer and send to client
     while((n = fread(buffer, sizeof(char), 2048, fp)) > 0 && size > 0) {
          send(sock, buffer, n, 0);
          memset(buffer, '\0', 2048);
